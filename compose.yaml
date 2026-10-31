@@ -1,0 +1,186 @@
+name: fgv-spexify-${DEPLOY_ENV:?DEPLOY_ENV must be set in .env}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+services:
+  spexify-mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.4}
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/MYSQL_ROOT_PASSWORD
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_USER_PASSWORD
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    volumes:
+      - mysql_data:/var/lib/mysql
+    secrets:
+      - MYSQL_ROOT_PASSWORD
+      - MYSQL_USER_PASSWORD
+
+  # Plays the published tracks for Subsonic apps. Reachable only from spexify-api, on a network of their own, and it
+  # trusts the Remote-User header only from the API's fixed address.
+  spexify-navidrome:
+    image: ${NAVIDROME_IMAGE:-deluan/navidrome:0.64.2}
+    user: "1000:1000"
+    environment:
+      ND_MUSICFOLDER: /music
+      ND_DATAFOLDER: /data
+      ND_LOGLEVEL: info
+      ND_EXTAUTH_TRUSTEDSOURCES: ${NAVIDROME_SUBNET_PREFIX:-172.31.250}.10/32
+      ND_SUBSONIC_DEFAULTREPORTREALPATH: "true"
+      ND_ENABLESHARING: "false"
+      ND_ENABLEINSIGHTSCOLLECTOR: "false"
+      ND_ENABLEEXTERNALSERVICES: "false"
+      ND_SCANNER_SCHEDULE: "0"
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [ "CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:4533/app/" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - ./data/media/music:/music:ro
+      - ./data/navidrome:/data
+    networks:
+      navidrome:
+        ipv4_address: ${NAVIDROME_SUBNET_PREFIX:-172.31.250}.20
+
+  spexify-api:
+    image: ${API_IMAGE:?API_IMAGE must be set in .env}
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://spexify-mysql/${MYSQL_DATABASE}
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak-server:8080/auth/realms/${KEYCLOAK_REALM}/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
+      LOGGING_FILE_PATH: /data/log_data
+      API_KEYCLOAK_URL: http://keycloak-server:8080/auth
+      API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      API_KEYCLOAK_ADMIN_CLIENT_ID: fgv-admin
+      API_MEDIA_ROOT: /data/media
+      API_NAVIDROME_URL: http://spexify-navidrome:4533
+      API_SPEXREGISTER_GRAPHQL_URL: ${SPEXREGISTER_GRAPHQL_URL:-http://spexregister-api:8080/api/graphql}
+      API_SPEXFLIX_GRAPHQL_URL: ${SPEXFLIX_GRAPHQL_URL:-}
+      API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA:-false}
+      API_SAMPLE_DATA_SIZE: ${API_SAMPLE_DATA_SIZE:-small}
+      SPRING_PROFILES_ACTIVE: ${DEPLOY_ENV}
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [ "CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9000;printf \"GET /actuator/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n\" >&3;grep -q \"^HTTP/1.1 200\" <&3" ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+    depends_on:
+      spexify-mysql:
+        condition: service_healthy
+      spexify-navidrome:
+        condition: service_healthy
+    volumes:
+      - ./data/api/log_data:/data/log_data
+      - ./data/media:/data/media
+    networks:
+      default:
+      fgv:
+      navidrome:
+        ipv4_address: ${NAVIDROME_SUBNET_PREFIX:-172.31.250}.10
+    secrets:
+      - source: MYSQL_USER_PASSWORD
+        target: MYSQL_API_USER_PASSWORD
+      - source: KEYCLOAK_ADMIN_CLIENT_SECRET
+        target: API_KEYCLOAK_ADMIN_CLIENT_SECRET
+      - source: KEYCLOAK_SERVICE_CLIENT_SECRET
+        target: API_KEYCLOAK_SERVICE_CLIENT_SECRET
+      - APP_PASSWORD_KEY
+      - SAMPLE_USER_PASSWORD
+      - SAMPLE_APP_PASSWORD
+
+  spexify-web:
+    image: ${WEB_IMAGE:?WEB_IMAGE must be set in .env}
+    command:
+      - sh
+      - -c
+      - |
+        export AUTH_SECRET=$$(cat /run/secrets/WEB_AUTH_SECRET)
+        export KEYCLOAK_CLIENT_SECRET=$$(cat /run/secrets/KEYCLOAK_CLIENT_SECRET)
+        exec node server.js
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      BETTER_AUTH_URL: https://${WEB_HOST}
+      KEYCLOAK_CLIENT_ID: fgv-spexify
+      KEYCLOAK_ISSUER: https://${KEYCLOAK_HOST}/auth/realms/${KEYCLOAK_REALM}
+      API_GRAPHQL_ENDPOINT: http://spexify-api:8080/api/graphql
+      SUBSONIC_URL: https://${WEB_HOST}
+      SPEXFLIX_WEB_URL: ${SPEXFLIX_WEB_URL:-}
+      SPEXREGISTER_WEB_URL: ${SPEXREGISTER_WEB_URL:-}
+      SUPPORTED_LOCALES: ${SUPPORTED_LOCALES:-sv,en}
+      DEFAULT_LOCALE: ${DEFAULT_LOCALE:-sv}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL}
+      FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
+      UMAMI_URL: http://umami-server:3000
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+    restart: unless-stopped
+    logging: *logging
+    healthcheck:
+      test: [ "CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:3000/api/auth/ok" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      spexify-api:
+        condition: service_healthy
+    networks:
+      - default
+      - fgv
+    secrets:
+      - WEB_AUTH_SECRET
+      - KEYCLOAK_CLIENT_SECRET
+
+volumes:
+  mysql_data:
+
+networks:
+  fgv:
+    name: fgv-${DEPLOY_ENV}
+    external: true
+  # Only the API and Navidrome; Navidrome trusts the API's fixed address
+  navidrome:
+    internal: true
+    ipam:
+      config:
+        - subnet: ${NAVIDROME_SUBNET_PREFIX:-172.31.250}.0/24
+
+secrets:
+  MYSQL_ROOT_PASSWORD:
+    file: ./secrets/MYSQL_ROOT_PASSWORD
+  MYSQL_USER_PASSWORD:
+    file: ./secrets/MYSQL_USER_PASSWORD
+  KEYCLOAK_SERVICE_CLIENT_SECRET:
+    file: ./secrets/KEYCLOAK_SERVICE_CLIENT_SECRET
+  KEYCLOAK_ADMIN_CLIENT_SECRET:
+    file: ./secrets/KEYCLOAK_ADMIN_CLIENT_SECRET
+  KEYCLOAK_CLIENT_SECRET:
+    file: ./secrets/KEYCLOAK_CLIENT_SECRET
+  APP_PASSWORD_KEY:
+    file: ./secrets/APP_PASSWORD_KEY
+  SAMPLE_USER_PASSWORD:
+    file: ./secrets/SAMPLE_USER_PASSWORD
+  SAMPLE_APP_PASSWORD:
+    file: ./secrets/SAMPLE_APP_PASSWORD
+  WEB_AUTH_SECRET:
+    file: ./secrets/WEB_AUTH_SECRET
