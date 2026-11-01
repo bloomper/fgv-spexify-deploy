@@ -36,7 +36,7 @@ random() { openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | head -c "$1"; }
 generate MYSQL_ROOT_PASSWORD "$(random 32)"
 generate MYSQL_USER_PASSWORD "$(random 32)"
 # Encrypts the app passwords. Losing it makes every app password stop working; back it up with the database.
-generate APP_PASSWORD_KEY "$(openssl rand -base64 32)"
+generate API_APP_PASSWORD_ENCRYPTION_KEY "$(openssl rand -base64 32)"
 copy_client_secret KEYCLOAK_CLIENT_SECRET fgv-spexify
 copy_client_secret KEYCLOAK_SERVICE_CLIENT_SECRET fgv-spexify-service
 # Only the sample data import manages Keycloak users, so the API gets fgv-admin's secret only when it imports

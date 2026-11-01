@@ -3,9 +3,11 @@
 Docker Compose setup for running Spexify (server, web, MySQL and Navidrome) on a single host, next to
 [spexregister-deploy][1] and [fgv-infra-deploy][2], which runs Keycloak and the shared network `fgv-<DEPLOY_ENV>`.
 
-Spexify streams and downloads audio, which Cloudflare's CDN terms restrict on the free plans, so its hostname is
-**DNS-only** (not proxied by Cloudflare) and served by the **edge proxy** in `fgv-infra-deploy` (`compose.edge.yaml`):
-Caddy on ports 80 and 443 with Let's Encrypt. There is no tunnel overlay here.
+Cloudflare is used on staging only, and even there not for Spexify itself: it streams and downloads audio, which
+Cloudflare's CDN terms restrict on the free plans, so on staging its hostname is **DNS-only** (not proxied by
+Cloudflare). It is served by the **edge proxy** in `fgv-infra-deploy` (`compose.edge.yaml`): Caddy on ports 80 and 443
+with Let's Encrypt. There is no tunnel overlay here. Production uses no Cloudflare at all; its reverse proxy serves
+`WEB_HOST` (see *Production*).
 
 ```
 Subsonic apps ─/rest──┐
@@ -43,7 +45,7 @@ port and no route to the internet.
   naming this deployment's `WEB_HOST` as `SPEXIFY_WEB_HOST`, because Keycloak only sends users back to that address.
   Its edge proxy (`compose.edge.yaml`) must run, with only ports 80 and 443 open on the host.
 - `spexregister-deploy` running a `spexregister-server` release that knows the `MEDIA` role.
-- A DNS-only record for `WEB_HOST` pointing at the host.
+- A DNS record for `WEB_HOST` pointing at the host: DNS-only (grey cloud) on staging, where the domain is on Cloudflare.
 
 ## 2. Checkout and configuration
 
@@ -69,12 +71,17 @@ docker compose up -d
 | `API_IMPORT_SAMPLE_DATA`          | `true` on staging only: replaces all data at every start                     |
 | `API_SAMPLE_DATA_SIZE`            | `small` or `large`                                                           |
 | `SUPPORT_EMAIL`, `FEEDBACK_EMAIL` | Shown on the Support and About pages                                         |
-| `UMAMI_WEBSITE_ID`                | Umami website for `WEB_HOST`; without it no statistics are sent              |
+| `UMAMI_WEBSITE_ID`                | Umami website for `WEB_HOST`; without it the web sends no statistics         |
+
+For visitor statistics, run `bin/configure-umami.sh` in `fgv-infra-deploy` (see *Umami* in its README). It adds a
+website `SPEXIFY_NAME` for `SPEXIFY_WEB_HOST` and prints its ID; put that ID in `UMAMI_WEBSITE_ID`. The web
+serves Umami's tracker as `/stats/script.js` and forwards events through `/stats/api/send`, so browsers only talk to
+`WEB_HOST`. Leave the ID empty to send nothing.
 
 ### Secrets
 
-`APP_PASSWORD_KEY` encrypts the users' app passwords. If it is lost, every app password stops working and users must
-create new ones; `bin/backup-media.sh` backs it up.
+`API_APP_PASSWORD_ENCRYPTION_KEY` encrypts the users' app passwords. If it is lost, every app password stops working
+and users must create new ones; `bin/backup-media.sh` backs it up.
 
 ## Media
 
@@ -100,6 +107,8 @@ Spexregister deletes all Keycloak users on every start of its sample import, so 
 
 - `.env` from `production.env.example`: `DEPLOY_ENV=production` (the API then refuses sample data),
   `API_IMPORT_SAMPLE_DATA=false`, and images pinned to release versions.
+- No Cloudflare. `WEB_HOST` is served by production's reverse proxy, with the routes of `fgv-infra-deploy`'s *Edge
+  proxy*: `/rest/*` to `spexify-api:8080`, everything else to `spexify-web:3000`, without buffering streams.
 - `bin/backup-db.sh` and `bin/backup-media.sh` in cron, with `backups/` copied off the host.
 - The music from the old Subsonic server is moved in once with `fgv-spexify-migration` before `spexify.fgv.nu` is
   pointed at this host.
