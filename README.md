@@ -9,7 +9,7 @@ and `API_HOST` (see *Production*).
 ```
 Staging:
 Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ──▶ spexify-web:3000              (WEB_HOST)
-Browser, Subsonic apps ──tailnet──▶ tailnet-spexify-api (fgv-infra-deploy) ──▶ spexify-api:8080   (API_HOST)
+Browser, Subsonic apps ──https──▶ Tailscale Funnel ──▶ tailnet-spexify-api (fgv-infra-deploy) ──▶ spexify-api:8080   (API_HOST)
 
 spexify-web ──▶ spexify-api ──▶ spexify-mysql
                 spexify-api ──Remote-User──▶ spexify-navidrome:4533   (network "navidrome", internal)
@@ -19,10 +19,9 @@ spexify-web ──▶ spexify-api ──▶ spexify-mysql
 - On staging, the web goes through the Cloudflare Tunnel like Spexregister, behind Cloudflare Access. Uploads are tus
   chunks of at most 50 MB through the web, below the request limit of Cloudflare's free plan.
 - Audio doesn't go through Cloudflare, whose CDN terms restrict serving audio and large files on the free plans.
-  Staging's host isn't reachable from the internet, so `API_HOST` is a machine of the tailnet,
-  `spexify-api-staging.<tailnet>.ts.net`, which proxies to `spexify-api` (`compose.tailnet.yaml` in
-  `fgv-infra-deploy`, see its *Tailnet*). Testers need Tailscale on the devices they listen on, including phones with
-  Subsonic apps; without it the web works but tracks don't play. On production, `API_HOST` is served from the host.
+  Staging's host isn't reachable from the internet, so `API_HOST` is `spexify-api-staging.<tailnet>.ts.net`, published
+  with Tailscale Funnel and proxied to `spexify-api` (`compose.tailnet.yaml` in `fgv-infra-deploy`, see its
+  *Tailnet*). Listeners and Subsonic apps need no Tailscale. On production, `API_HOST` is served from the host.
   It serves:
   - the Subsonic API (`/rest/*`) for apps, which connect to `API_HOST`;
   - the web player's audio and the downloads, from signed, expiring links (`/media/*`): the web checks the user's
@@ -69,9 +68,10 @@ reverse proxy (see *Production*).
 2. Add one published application: `WEB_HOST` → `http://spexify-web:3000`.
 3. Restrict `WEB_HOST` to testers with Cloudflare Access, as `spexregister-deploy`'s README describes.
 
-`API_HOST` is not on Cloudflare: it is the tailnet name of `tailnet-spexify-api`, e.g.
-`spexify-api-staging.tail1234.ts.net` (see *Tailnet* in `fgv-infra-deploy`). Only tailnet members reach it; inside the
-tailnet the API still requires a Keycloak token or an app password, and its media links are signed and expire.
+`API_HOST` is not on Cloudflare: it is the Funnel name of `tailnet-spexify-api`, e.g.
+`spexify-api-staging.tail1234.ts.net` (see *Tailnet* in `fgv-infra-deploy`). It is public and has no Access, like
+Spexregister's API: Subsonic apps can't complete an Access login, the API requires a Keycloak token or an app password,
+and its media links are signed and expire.
 
 ## 3. Checkout and configuration
 
@@ -155,7 +155,7 @@ Spexregister deletes all Keycloak users on every start of its sample import, so 
 | Published tracks missing in apps                  | Navidrome has not scanned yet; *Administration → Music server → Scan again* |
 | Login fails with "Invalid parameter: redirect_uri" | `SPEXIFY_WEB_HOST` in `fgv-infra-deploy` doesn't match `WEB_HOST`          |
 | Tracks don't play; the console names a Content Security Policy | `API_HOST` changed without restarting `spexify-web`          |
-| Apps or the player can't reach `API_HOST` (staging) | The device isn't on the tailnet or not allowed `tag:fgv-staging`, or `tailnet-spexify-api` isn't running |
+| Apps or the player can't reach `API_HOST` (staging) | `tailnet-spexify-api` isn't running or logged in (see its log), or Funnel isn't allowed for `tag:fgv-staging` |
 | Apps or the player can't reach `API_HOST` (production) | `SPEXIFY_API_HOST` in `fgv-infra-deploy` doesn't match `API_HOST`, or `edge-caddy` isn't running |
 
 [1]: https://github.com/bloomper/spexregister-deploy
