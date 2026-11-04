@@ -37,6 +37,8 @@ generate MYSQL_ROOT_PASSWORD "$(random 32)"
 generate MYSQL_USER_PASSWORD "$(random 32)"
 # Encrypts the app passwords. Losing it makes every app password stop working; back it up with the database.
 generate API_APP_PASSWORD_ENCRYPTION_KEY "$(openssl rand -base64 32)"
+# Signs the links to audio and downloads; changing it only makes open players ask for new links
+generate API_MEDIA_SIGNING_KEY "$(random 48)"
 copy_client_secret KEYCLOAK_CLIENT_SECRET fgv-spexify
 copy_client_secret KEYCLOAK_SERVICE_CLIENT_SECRET fgv-spexify-service
 # Only the sample data import manages Keycloak users, so the API gets fgv-admin's secret only when it imports
@@ -55,3 +57,7 @@ else
   touch secrets/KEYCLOAK_ADMIN_CLIENT_SECRET secrets/SAMPLE_USER_PASSWORD secrets/SAMPLE_APP_PASSWORD
 fi
 generate WEB_AUTH_SECRET "$(random 48)"
+if [[ ! -s secrets/cloudflared.env ]]; then
+  printf 'TUNNEL_TOKEN=\n' > secrets/cloudflared.env
+  echo "created secrets/cloudflared.env (staging only: paste the tunnel token into it)"
+fi
