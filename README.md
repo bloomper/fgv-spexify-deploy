@@ -66,8 +66,9 @@ docker compose up -d
 | `KEYCLOAK_HOST`, `KEYCLOAK_REALM` | Keycloak's public address and realm                                          |
 | `NAVIDROME_SUBNET_PREFIX`         | The internal network between the API and Navidrome, e.g. `172.31.250` (/24)   |
 | `SPEXREGISTER_GRAPHQL_URL`        | Spexregister's GraphQL endpoint on the shared network                        |
-| `SPEXFLIX_GRAPHQL_URL`, `SPEXFLIX_WEB_URL` | Spexflix, for links between tracks and videos; empty without Spexflix |
-| `SPEXREGISTER_WEB_URL`            | Spexregister's web, for links to a spex                                      |
+| `SPEXFLIX_GRAPHQL_URL`, `SPEXFLIX_WEB_URL` | Spexflix, for links between tracks and videos; empty without Spexflix; also the application switcher |
+| `SPEXREGISTER_WEB_URL`            | Spexregister's web, for links to a spex; also the application switcher       |
+| `FGV_REVIVAL_WEB_URL`             | Nyuppsättning's web, for the application switcher                            |
 | `API_IMPORT_SAMPLE_DATA`          | `true` on staging only: replaces all data at every start                     |
 | `API_SAMPLE_DATA_SIZE`            | `small` or `large`                                                           |
 | `SUPPORT_EMAIL`, `FEEDBACK_EMAIL` | Shown on the Support and About pages                                         |
