@@ -3,20 +3,28 @@
 Docker Compose setup for running Spexify (server, web, MySQL and Navidrome) on a single host, next to
 [spexregister-deploy][1] and [fgv-infra-deploy][2], which runs Keycloak and the shared network `fgv-<DEPLOY_ENV>`.
 
-Cloudflare is used on staging only, and even there not for Spexify itself: it streams and downloads audio, which
-Cloudflare's CDN terms restrict on the free plans, so on staging its hostname is **DNS-only** (not proxied by
-Cloudflare). It is served by the **edge proxy** in `fgv-infra-deploy` (`compose.edge.yaml`): Caddy on ports 80 and 443
-with Let's Encrypt. There is no tunnel overlay here. Production uses no Cloudflare at all; its reverse proxy serves
-`WEB_HOST` (see *Production*).
+Cloudflare is used on staging only. Production uses no Cloudflare Tunnel, DNS or Access: its own reverse proxy serves
+`WEB_HOST` and `API_HOST` (see *Production*).
 
 ```
-Subsonic apps ─/rest──┐
-Browser ──────────────┼─https─▶ edge-caddy (fgv-infra-deploy) ─┬─▶ spexify-api:8080   /rest/*
-                      │                                       └─▶ spexify-web:3000   everything else
+Staging:
+Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ──▶ spexify-web:3000              (WEB_HOST)
+Browser, Subsonic apps ──https──▶ edge-caddy (fgv-infra-deploy) ──▶ spexify-api:8080     (API_HOST, DNS-only)
+
 spexify-web ──▶ spexify-api ──▶ spexify-mysql
                 spexify-api ──Remote-User──▶ spexify-navidrome:4533   (network "navidrome", internal)
                 spexify-api ──▶ keycloak-server, spexregister-api, spexflix-api   (fgv network)
 ```
+
+- On staging, the web goes through the Cloudflare Tunnel like Spexregister, behind Cloudflare Access. Uploads are tus
+  chunks of at most 50 MB through the web, below the request limit of Cloudflare's free plan.
+- Audio goes to listeners straight from the host, on staging because Cloudflare's CDN terms restrict serving audio and
+  large files on the free plans. `API_HOST` is a DNS-only record served by `edge-caddy` (`compose.edge.yaml` in
+  `fgv-infra-deploy`), which forwards it to `spexify-api`. It serves:
+  - the Subsonic API (`/rest/*`) for apps, which connect to `API_HOST`;
+  - the web player's audio and the downloads, from signed, expiring links (`/media/*`): the web checks the user's
+    session, asks the API for a link and redirects the browser to it, so the browser never holds a token;
+  - the API documentation (`/docs`), and GraphQL, which requires a Keycloak token.
 
 Navidrome is reachable only from the API, on an internal network where the API has a fixed address
 (`NAVIDROME_SUBNET_PREFIX.10`), and it trusts the `Remote-User` header only from that address. It has no published
@@ -27,6 +35,7 @@ port and no route to the internet.
 | File                     | Purpose                                                                          |
 |--------------------------|----------------------------------------------------------------------------------|
 | `compose.yaml`           | `spexify-mysql`, `spexify-navidrome`, `spexify-api`, `spexify-web`               |
+| `compose.tunnel.yaml`    | `cloudflared` connector for `WEB_HOST`, staging only                             |
 | `staging.env.example`    | Template for `.env` on the staging host                                          |
 | `production.env.example` | Template for `.env` on the production host                                       |
 | `bin/init-secrets.sh`    | Generates secrets into `secrets/` and copies the client secrets from `fgv-infra-deploy` |
@@ -43,11 +52,24 @@ port and no route to the internet.
 
 - `fgv-infra-deploy` running with a realm that has the `fgv-spexify` and `fgv-spexify-service` clients, and its `.env`
   naming this deployment's `WEB_HOST` as `SPEXIFY_WEB_HOST`, because Keycloak only sends users back to that address.
-  Its edge proxy (`compose.edge.yaml`) must run, with only ports 80 and 443 open on the host.
+  Its `.env` also names `API_HOST` as `SPEXIFY_API_HOST`, and its edge proxy (`compose.edge.yaml`) must run, with only
+  ports 80 and 443 open on the host.
 - `spexregister-deploy` running a `spexregister-server` release that knows the `MEDIA` role.
-- A DNS record for `WEB_HOST` pointing at the host: DNS-only (grey cloud) on staging, where the domain is on Cloudflare.
 
-## 2. Checkout and configuration
+## 2. Cloudflare (staging only)
+
+Only staging uses Cloudflare. On production, skip this section and point `WEB_HOST` and `API_HOST` at production's
+reverse proxy (see *Production*).
+
+1. Create a tunnel (Networking → Tunnels → *Create a tunnel* → Cloudflared), e.g. `fgv-spexify-staging`, and copy its
+   token.
+2. Add one published application: `WEB_HOST` → `http://spexify-web:3000`.
+3. Add a **DNS-only** (grey cloud) A/AAAA record for `API_HOST` pointing at the host.
+4. Restrict `WEB_HOST` to testers with Cloudflare Access, as `spexregister-deploy`'s README describes. `API_HOST`
+   can't have Access: Subsonic apps can't complete an Access login, the API already requires a Keycloak token or an app
+   password, and its media links are signed and expire.
+
+## 3. Checkout and configuration
 
 ```shell
 git clone https://github.com/bloomper/fgv-spexify-deploy.git
@@ -55,6 +77,7 @@ cd fgv-spexify-deploy
 
 cp staging.env.example .env          # set the hostnames
 bin/init-secrets.sh                  # copies the client secrets from ../fgv-infra-deploy
+nano secrets/cloudflared.env         # staging only: TUNNEL_TOKEN=<token from step 2>
 mkdir -p data/api/log_data data/media/music data/navidrome
 sudo chown -R 1000:1000 data
 docker compose up -d
@@ -62,7 +85,8 @@ docker compose up -d
 
 | Variable                          | Purpose                                                                      |
 |-----------------------------------|------------------------------------------------------------------------------|
-| `WEB_HOST`                        | Spexify's address, for the web and for Subsonic apps                         |
+| `WEB_HOST`                        | Spexify's web                                                                |
+| `API_HOST`                        | The API's DNS-only address: Subsonic apps, audio, downloads and `/docs`      |
 | `KEYCLOAK_HOST`, `KEYCLOAK_REALM` | Keycloak's public address and realm                                          |
 | `NAVIDROME_SUBNET_PREFIX`         | The internal network between the API and Navidrome, e.g. `172.31.250` (/24)   |
 | `SPEXREGISTER_GRAPHQL_URL`        | Spexregister's GraphQL endpoint on the shared network                        |
@@ -83,6 +107,9 @@ serves Umami's tracker as `/stats/script.js` and forwards events through `/stats
 
 `API_APP_PASSWORD_ENCRYPTION_KEY` encrypts the users' app passwords. If it is lost, every app password stops working
 and users must create new ones; `bin/backup-media.sh` backs it up.
+
+`API_MEDIA_SIGNING_KEY` signs the links to audio and downloads. Changing it invalidates every link handed out, which
+only makes open players ask for new ones.
 
 ## Media
 
@@ -108,11 +135,12 @@ Spexregister deletes all Keycloak users on every start of its sample import, so 
 
 - `.env` from `production.env.example`: `DEPLOY_ENV=production` (the API then refuses sample data),
   `API_IMPORT_SAMPLE_DATA=false`, and images pinned to release versions.
-- No Cloudflare. `WEB_HOST` is served by production's reverse proxy, with the routes of `fgv-infra-deploy`'s *Edge
-  proxy*: `/rest/*` to `spexify-api:8080`, everything else to `spexify-web:3000`, without buffering streams.
+- No Cloudflare: `COMPOSE_FILE` leaves out `compose.tunnel.yaml` and needs no `secrets/cloudflared.env`. Production's
+  own reverse proxy terminates TLS and forwards `WEB_HOST` to `spexify-web:3000` (tus chunks of up to 50 MB) and
+  `API_HOST` to `spexify-api:8080`, without buffering streams, as `fgv-infra-deploy`'s *Edge proxy* describes.
 - `bin/backup-db.sh` and `bin/backup-media.sh` in cron, with `backups/` copied off the host.
 - The music from the old Subsonic server is moved in once with `fgv-spexify-migration` before `spexify.fgv.nu` is
-  pointed at this host.
+  pointed at this host. Subsonic apps then connect to `API_HOST`, not `spexify.fgv.nu`.
 
 ## Troubleshooting
 
@@ -122,6 +150,8 @@ Spexregister deletes all Keycloak users on every start of its sample import, so 
 | *Music server* says "not answering"               | `spexify-navidrome` is down, or `NAVIDROME_SUBNET_PREFIX` changed without recreating the network |
 | Published tracks missing in apps                  | Navidrome has not scanned yet; *Administration → Music server → Scan again* |
 | Login fails with "Invalid parameter: redirect_uri" | `SPEXIFY_WEB_HOST` in `fgv-infra-deploy` doesn't match `WEB_HOST`          |
+| Tracks don't play; the console names a Content Security Policy | `API_HOST` changed without restarting `spexify-web`          |
+| Apps or the player can't reach `API_HOST`         | `SPEXIFY_API_HOST` in `fgv-infra-deploy` doesn't match `API_HOST`, or `edge-caddy` isn't running |
 
 [1]: https://github.com/bloomper/spexregister-deploy
 [2]: https://github.com/bloomper/fgv-infra-deploy
