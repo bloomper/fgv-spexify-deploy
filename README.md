@@ -13,7 +13,8 @@ Browser, Subsonic apps ──https──▶ Tailscale Funnel ──▶ tailnet-s
 
 spexify-web ──▶ spexify-api ──▶ spexify-mysql
                 spexify-api ──Remote-User──▶ spexify-navidrome:4533   (network "navidrome", internal)
-                spexify-api ──▶ keycloak-server, spexregister-api, spexflix-api   (fgv network)
+                spexify-api ──▶ keycloak-server, spexipedia-api, spexflix-api     (fgv network)
+                spexipedia-api ──▶ spexify-api (spexipediaLinks, /api/sync/notify)   (fgv network)
 ```
 
 - On staging, the web goes through the Cloudflare Tunnel like Spexregister, behind Cloudflare Access. Uploads are tus
@@ -56,7 +57,10 @@ port and no route to the internet.
   naming this deployment's `WEB_HOST` as `SPEXIFY_WEB_HOST`, because Keycloak only sends users back to that address.
   On staging, its tailnet containers (`compose.tailnet.yaml`) must run; on production, its edge proxy
   (`compose.edge.yaml`, whose `.env` names `API_HOST` as `SPEXIFY_API_HOST`) or production's own reverse proxy.
-- `spexregister-deploy` running a `spexregister-server` release that knows the `MEDIA` role.
+- `fgv-spexipedia-deploy` running: Spexify reads spex and numbers from Spexipedia and follows its change feed. Its sample
+  data adds Spexify as a recipient of change notices; in production an admin adds it under *Administration →
+  Mottagare av ändringar* (`fgv-spexify-service`, `http://spexify-api:8080/api/sync/notify`).
+- `spexregister-deploy` running, for the sample data's users.
 
 ## 2. Cloudflare (staging only)
 
@@ -93,7 +97,8 @@ docker compose up -d
 | `API_HOST`                        | The API's DNS-only address: Subsonic apps, audio, downloads and `/docs`      |
 | `KEYCLOAK_HOST`, `KEYCLOAK_REALM` | Keycloak's public address and realm                                          |
 | `NAVIDROME_SUBNET_PREFIX`         | The internal network between the API and Navidrome, e.g. `172.31.250` (/24)   |
-| `SPEXREGISTER_GRAPHQL_URL`        | Spexregister's GraphQL endpoint on the shared network                        |
+| `SPEXIPEDIA_GRAPHQL_URL`          | Spexipedia's GraphQL endpoint on the shared network: spex, numbers, change feed |
+| `SPEXIPEDIA_WEB_URL`              | Spexipedia's web, for *In Spexipedia* links; also the application switcher   |
 | `SPEXFLIX_GRAPHQL_URL`, `SPEXFLIX_WEB_URL` | Spexflix, for links between tracks and videos; empty without Spexflix; also the application switcher |
 | `SPEXREGISTER_WEB_URL`            | Spexregister's web, for links to a spex; also the application switcher       |
 | `FGV_REVIVAL_WEB_URL`             | Nyuppsättning's web, for the application switcher                            |

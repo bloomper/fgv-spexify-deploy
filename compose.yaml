@@ -77,7 +77,8 @@ services:
       # Signed links to audio and downloads point here, outside the tunnel
       API_PUBLIC_URL: https://${API_HOST:?API_HOST must be set in .env}
       API_NAVIDROME_URL: http://spexify-navidrome:4533
-      API_SPEXREGISTER_GRAPHQL_URL: ${SPEXREGISTER_GRAPHQL_URL:-http://spexregister-api:8080/api/graphql}
+      API_SPEXIPEDIA_GRAPHQL_URL: ${SPEXIPEDIA_GRAPHQL_URL:-http://spexipedia-api:8080/api/graphql}
+      SPEXIPEDIA_WEB_URL: ${SPEXIPEDIA_WEB_URL:-}
       API_SPEXFLIX_GRAPHQL_URL: ${SPEXFLIX_GRAPHQL_URL:-}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA:-false}
       API_SAMPLE_DATA_SIZE: ${API_SAMPLE_DATA_SIZE:-small}
@@ -141,6 +142,7 @@ services:
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-sv}
       FGV_REVIVAL_WEB_URL: ${FGV_REVIVAL_WEB_URL:-}
       SPEXGRAM_WEB_URL: ${SPEXGRAM_WEB_URL:-}
+      SPEXIPEDIA_WEB_URL: ${SPEXIPEDIA_WEB_URL:-}
       ARCHIVE_WEB_URL: ${ARCHIVE_WEB_URL:-}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
       FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
