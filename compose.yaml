@@ -20,6 +20,7 @@ services:
       MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_USER_PASSWORD
     restart: unless-stopped
     logging: *logging
+    security_opt: *security-opt
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent" ]
       interval: 10s
@@ -49,6 +50,7 @@ services:
       ND_SCANNER_SCHEDULE: "0"
     restart: unless-stopped
     logging: *logging
+    security_opt: *security-opt
     healthcheck:
       test: [ "CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:4533/app/" ]
       interval: 10s
