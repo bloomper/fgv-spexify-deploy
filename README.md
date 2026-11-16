@@ -60,7 +60,7 @@ port and no route to the internet.
 - `fgv-spexipedia-deploy` running: Spexify reads spex and numbers from Spexipedia and follows its change feed. Its sample
   data adds Spexify as a recipient of change notices; in production an admin adds it under *Administration →
   Mottagare av ändringar* (`fgv-spexify-service`, `http://spexify-api:8080/api/sync/notify`).
-- `spexregister-deploy` running, for the sample data's users.
+- `fgv-infra-deploy`'s `bin/seed-users.sh` run, for the sample users and their roles.
 
 ## 2. Cloudflare (staging only)
 
@@ -136,9 +136,8 @@ Everything lies under `data/media/`, mounted into the API; Navidrome mounts only
 ## First start
 
 The API creates its tables, and on staging (`API_IMPORT_SAMPLE_DATA=true`) replaces all data with sample data built on
-Spexregister's sample spex; see *Sample data* in `fgv-spexify-server`'s README for the users and the app password.
-Spexregister deletes all Keycloak users on every start of its sample import, so restart Spexify after it:
-`docker compose restart spexify-api`. The sample import keeps Navidrome's database (stars and playlists); run
+Spexipedia's sample spex; see *Sample data* in `fgv-spexify-server`'s README for the users (`fgv-infra-deploy`'s) and the
+app password. The sample import keeps Navidrome's database (stars and playlists); run
 `bin/reset-navidrome.sh` to empty it.
 
 ## Production
