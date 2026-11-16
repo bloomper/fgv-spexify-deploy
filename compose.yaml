@@ -20,6 +20,7 @@ services:
       MYSQL_PASSWORD_FILE: /run/secrets/MYSQL_USER_PASSWORD
     restart: unless-stopped
     logging: *logging
+    security_opt: *security-opt
     healthcheck:
       test: [ "CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent" ]
       interval: 10s
@@ -49,6 +50,7 @@ services:
       ND_SCANNER_SCHEDULE: "0"
     restart: unless-stopped
     logging: *logging
+    security_opt: *security-opt
     healthcheck:
       test: [ "CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:4533/app/" ]
       interval: 10s
@@ -72,12 +74,12 @@ services:
       LOGGING_FILE_PATH: /data/log_data
       API_KEYCLOAK_URL: http://keycloak-server:8080/auth
       API_KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      API_KEYCLOAK_ADMIN_CLIENT_ID: fgv-admin
       API_MEDIA_ROOT: /data/media
       # Signed links to audio and downloads point here, outside the tunnel
       API_PUBLIC_URL: https://${API_HOST:?API_HOST must be set in .env}
       API_NAVIDROME_URL: http://spexify-navidrome:4533
-      API_SPEXREGISTER_GRAPHQL_URL: ${SPEXREGISTER_GRAPHQL_URL:-http://spexregister-api:8080/api/graphql}
+      API_SPEXIPEDIA_GRAPHQL_URL: ${SPEXIPEDIA_GRAPHQL_URL:-http://spexipedia-api:8080/api/graphql}
+      SPEXIPEDIA_WEB_URL: ${SPEXIPEDIA_WEB_URL:-}
       API_SPEXFLIX_GRAPHQL_URL: ${SPEXFLIX_GRAPHQL_URL:-}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA:-false}
       API_SAMPLE_DATA_SIZE: ${API_SAMPLE_DATA_SIZE:-small}
@@ -107,13 +109,10 @@ services:
     secrets:
       - source: MYSQL_USER_PASSWORD
         target: MYSQL_API_USER_PASSWORD
-      - source: KEYCLOAK_ADMIN_CLIENT_SECRET
-        target: API_KEYCLOAK_ADMIN_CLIENT_SECRET
       - source: KEYCLOAK_SERVICE_CLIENT_SECRET
         target: API_KEYCLOAK_SERVICE_CLIENT_SECRET
       - API_APP_PASSWORD_ENCRYPTION_KEY
       - API_MEDIA_SIGNING_KEY
-      - SAMPLE_USER_PASSWORD
       - SAMPLE_APP_PASSWORD
 
   spexify-web:
@@ -139,8 +138,9 @@ services:
       SPEXREGISTER_WEB_URL: ${SPEXREGISTER_WEB_URL:-}
       SUPPORTED_LOCALES: ${SUPPORTED_LOCALES:-sv,en}
       DEFAULT_LOCALE: ${DEFAULT_LOCALE:-sv}
-      FGV_REVIVAL_WEB_URL: ${FGV_REVIVAL_WEB_URL:-}
+      REVIVAL_WEB_URL: ${REVIVAL_WEB_URL:-}
       SPEXGRAM_WEB_URL: ${SPEXGRAM_WEB_URL:-}
+      SPEXIPEDIA_WEB_URL: ${SPEXIPEDIA_WEB_URL:-}
       ARCHIVE_WEB_URL: ${ARCHIVE_WEB_URL:-}
       SUPPORT_EMAIL: ${SUPPORT_EMAIL}
       FEEDBACK_EMAIL: ${FEEDBACK_EMAIL}
@@ -186,16 +186,12 @@ secrets:
     file: ./secrets/MYSQL_USER_PASSWORD
   KEYCLOAK_SERVICE_CLIENT_SECRET:
     file: ./secrets/KEYCLOAK_SERVICE_CLIENT_SECRET
-  KEYCLOAK_ADMIN_CLIENT_SECRET:
-    file: ./secrets/KEYCLOAK_ADMIN_CLIENT_SECRET
   KEYCLOAK_CLIENT_SECRET:
     file: ./secrets/KEYCLOAK_CLIENT_SECRET
   API_APP_PASSWORD_ENCRYPTION_KEY:
     file: ./secrets/API_APP_PASSWORD_ENCRYPTION_KEY
   API_MEDIA_SIGNING_KEY:
     file: ./secrets/API_MEDIA_SIGNING_KEY
-  SAMPLE_USER_PASSWORD:
-    file: ./secrets/SAMPLE_USER_PASSWORD
   SAMPLE_APP_PASSWORD:
     file: ./secrets/SAMPLE_APP_PASSWORD
   WEB_AUTH_SECRET:

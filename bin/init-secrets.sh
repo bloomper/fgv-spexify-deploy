@@ -5,8 +5,15 @@ cd "$(dirname "$0")/.."
 umask 077
 mkdir -p secrets
 
-infra_deploy=${INFRA_DEPLOY:-../fgv-infra-deploy}
-spexregister_deploy=${SPEXREGISTER_DEPLOY:-../spexregister-deploy}
+# Next to this checkout, as on the hosts, or one level further up when the repos are grouped per application
+# (fgv/fgv-infra-deploy, fgv/spexify/fgv-spexify-deploy, ...); INFRA_DEPLOY overrides both
+if [[ -n ${INFRA_DEPLOY:-} ]]; then
+  infra_deploy=$INFRA_DEPLOY
+elif [[ -d ../fgv-infra-deploy ]]; then
+  infra_deploy=../fgv-infra-deploy
+else
+  infra_deploy=../../fgv-infra-deploy
+fi
 
 generate() {
   local name=$1 value=$2
@@ -41,20 +48,11 @@ generate API_APP_PASSWORD_ENCRYPTION_KEY "$(openssl rand -base64 32)"
 generate API_MEDIA_SIGNING_KEY "$(random 48)"
 copy_client_secret KEYCLOAK_CLIENT_SECRET fgv-spexify
 copy_client_secret KEYCLOAK_SERVICE_CLIENT_SECRET fgv-spexify-service
-# Only the sample data import manages Keycloak users, so the API gets fgv-admin's secret only when it imports
+# The sample data's Subsonic app password
 if grep -qx 'API_IMPORT_SAMPLE_DATA=true' .env 2>/dev/null; then
-  copy_client_secret KEYCLOAK_ADMIN_CLIENT_SECRET fgv-admin
-  if [[ -s secrets/SAMPLE_USER_PASSWORD ]]; then
-    echo "keep secrets/SAMPLE_USER_PASSWORD"
-  elif [[ -s $spexregister_deploy/secrets/SAMPLE_USER_PASSWORD ]]; then
-    cp "$spexregister_deploy/secrets/SAMPLE_USER_PASSWORD" secrets/SAMPLE_USER_PASSWORD
-    echo "copied secrets/SAMPLE_USER_PASSWORD from $spexregister_deploy"
-  else
-    echo "missing secrets/SAMPLE_USER_PASSWORD: run bin/init-secrets.sh in spexregister-deploy first, or set SPEXREGISTER_DEPLOY" >&2
-  fi
   generate SAMPLE_APP_PASSWORD "$(random 24)"
 else
-  touch secrets/KEYCLOAK_ADMIN_CLIENT_SECRET secrets/SAMPLE_USER_PASSWORD secrets/SAMPLE_APP_PASSWORD
+  touch secrets/SAMPLE_APP_PASSWORD
 fi
 generate WEB_AUTH_SECRET "$(random 48)"
 if [[ ! -s secrets/cloudflared.env ]]; then
