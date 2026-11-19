@@ -13,7 +13,7 @@ Browser, Subsonic apps ──https──▶ Tailscale Funnel ──▶ tailnet-s
 
 spexify-web ──▶ spexify-api ──▶ spexify-mysql
                 spexify-api ──Remote-User──▶ spexify-navidrome:4533   (network "navidrome", internal)
-                spexify-api ──▶ keycloak-server, spexipedia-api, spexflix-api     (fgv network)
+                spexify-api ──▶ keycloak-server, spexipedia-api, spexflix-api, archive-api (fgv network)
                 spexipedia-api ──▶ spexify-api (spexipediaLinks, /api/sync/notify)   (fgv network)
 ```
 
@@ -102,7 +102,8 @@ docker compose up -d
 | `SPEXFLIX_GRAPHQL_URL`, `SPEXFLIX_WEB_URL` | Spexflix, for links between tracks and videos; empty without Spexflix; also the application switcher |
 | `SPEXREGISTER_WEB_URL`            | Spexregister's web, for links to a spex; also the application switcher       |
 | `REVIVAL_WEB_URL`             | Nyuppsättning's web, for the application switcher                            |
-| `SPEXGRAM_WEB_URL`, `ARCHIVE_WEB_URL` | Spexgram's and Spexarkiv's webs, for the application switcher         |
+| `ARCHIVE_GRAPHQL_URL` | Spexarkivet's GraphQL API, for the sheet music of tracks' numbers (the `SPEXIFY` role on `fgv-archive`); empty without it |
+| `SPEXGRAM_WEB_URL`, `ARCHIVE_WEB_URL` | Spexgram's and Spexarkiv's webs, for the application switcher and, `ARCHIVE_WEB_URL`, links to arrangements |
 | `API_IMPORT_SAMPLE_DATA`          | `true` on staging only: replaces all data at every start                     |
 | `API_SAMPLE_DATA_SIZE`            | `small` or `large`                                                           |
 | `SUPPORT_EMAIL`, `FEEDBACK_EMAIL` | Shown on the Support and About pages                                         |
