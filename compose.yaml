@@ -83,6 +83,9 @@ services:
       API_SPEXIPEDIA_GRAPHQL_URL: ${SPEXIPEDIA_GRAPHQL_URL:-http://spexipedia-api:8080/api/graphql}
       SPEXIPEDIA_WEB_URL: ${SPEXIPEDIA_WEB_URL:-}
       API_SPEXFLIX_GRAPHQL_URL: ${SPEXFLIX_GRAPHQL_URL:-}
+      # Spexarkivet, for the sheet music of tracks' numbers; empty leaves sheet music out
+      API_ARCHIVE_GRAPHQL_URL: ${ARCHIVE_GRAPHQL_URL:-}
+      ARCHIVE_WEB_URL: ${ARCHIVE_WEB_URL:-}
       API_IMPORT_SAMPLE_DATA: ${API_IMPORT_SAMPLE_DATA:-false}
       API_SAMPLE_DATA_SIZE: ${API_SAMPLE_DATA_SIZE:-small}
       SPRING_PROFILES_ACTIVE: ${DEPLOY_ENV}
